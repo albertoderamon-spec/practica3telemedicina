@@ -1,63 +1,70 @@
 var express = require("express");
 var app = express();
 
-const mysql = require('mysql');
-const database = {
-    host : 'localhost',
-    user : 'root',
-    password : '',
-    database : 'practica3telemedicina'
-};
+// 1. Importar el cliente de Supabase
+const { createClient } = require('@supabase/supabase-js');
 
-const conexion = mysql.createConnection(database);
-
-conexion.connect(function (err) {
-    if (err) {
-        console.error('Error en la conexión de la base de datos:',err);
-        process.exit();
-    }
-});
-
+// 2. Configurar con tu URL y tu Public Key (anon key)
+const supabaseUrl = 'https://nlffavtboumkxzmaxxkk.supabase.co';
+const supabaseKey = 'sb_publishable_4_-MHIl3sW6kSPvkRTmzkQ_3_o_IFQo'; // <--- Pega aquí tu public key
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use("/appCliente", express.static("cliente_rest"));
 app.use(express.json());
 
-
-app.post("/api/gestores/login", (req, res) => {
+// --- RUTA DE LOGIN ---
+app.post("/api/gestores/login", async (req, res) => {
   var usuario = req.body.usuario;
   var contraseña = req.body.contraseña;
 
-  var sql = "SELECT id FROM gestores WHERE usuario = ? AND contrasena = ?";
-  conexion.query(sql, [usuario, contraseña], function (err, gestores) {
-    if (err) {
-      console.log("Error al realizar la select", err);
+  try {
+    const { data: gestores, error } = await supabase
+      .from('gestores')
+      .select('id')
+      .eq('usuario', usuario)
+      .eq('contrasena', contraseña);
+
+    if (error) {
+      console.log("Error al realizar la select", error);
       return res.status(500).json("Error al realizar la consulta");
     }
-    if (gestores.length === 1) {
+
+    if (gestores && gestores.length === 1) {
       res.status(200).json(gestores[0].id);
     } else {
       res.status(403).json("Credenciales incorrectas.");
     }
-  });
+  } catch (err) {
+    console.error("Error en el servidor:", err);
+    res.status(500).json("Error interno del servidor");
+  }
 });
 
-
-app.get("/api/gestores/:id", function (req, res) {
+// --- RUTA PARA OBTENER GESTOR POR ID ---
+app.get("/api/gestores/:id", async function (req, res) {
   var idGestor = parseInt(req.params.id);
-  var sql = "SELECT id, nombre, apellidos, usuario FROM gestores WHERE id = ?";
 
-  conexion.query(sql, [idGestor], function (err, gestores) {
-    if (err) {
-      console.log("Error al realizar la select", err);
+  try {
+    const { data: gestores, error } = await supabase
+      .from('gestores')
+      .select('id, nombre, apellidos, usuario')
+      .eq('id', idGestor);
+
+    if (error) {
+      console.log("Error al realizar la select", error);
       return res.status(500).json("Error al realizar la consulta");
     }
-    if (gestores.length === 0) {
+
+    if (!gestores || gestores.length === 0) {
       return res.status(404).json("Gestor no encontrado.");
     }
+    
     res.status(200).json(gestores[0]);
-  });
+  } catch (err) {
+    console.error("Error en el servidor:", err);
+    res.status(500).json("Error interno del servidor");
+  }
 });
-
 
 app.listen(3000, () => {
   console.log('Servidor en http://localhost:3000');
